@@ -4,7 +4,7 @@ EPOCH = 100
 OPTIMIZER = 'Adam'
 LOG_INTERVAL = 100
 BATCH_SIZE = 1
-NUM_EX = "02"
+NUM_EX = "03"
 GRAPH_PDF = "./ex{}/trian_loss.pdf".format(NUM_EX)
 
 PARAM_EPOCH = "96"

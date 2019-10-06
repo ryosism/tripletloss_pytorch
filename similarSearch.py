@@ -14,7 +14,7 @@ import argparse
 from pathlib import Path
 
 # Dataset
-from TcnDataset import *
+from similarSearchDataset import *
 
 # pretrained models
 from cnn_finetune import make_model
@@ -60,63 +60,50 @@ def test(logger):
     model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(384, 384))
     model.load_state_dict(torch.load(cfg.TRAINED_PARAM))
     model = model.to(device)
+    model.eval()
     logger.log(30, "model {} was loaded.".format(str(Path(cfg.TRAINED_PARAM).name)))
-
-
 
     # Predict the closest frame in all frames
     for testDir in testDirList:
-        import pdb; pdb.set_trace()
 
+        # フレームディレクトリからDataloaderを作成
+        similarSearchDataset = SimilarSearchDataset(videoFramePathDir=str(testDir/"frame30"))
+        videoFrameDataLoader = torch.utils.data.DataLoader(
+            dataset=similarSearchDataset,
+            batch_size=cfg.TEST_BATCH_SIZE,
+            shuffle=False,
+            num_workers=6,
+            pin_memory=True
+        )
+
+        # 手順画像は直接リストで作成
         recipeOrderImageList = [path for path in (testDir/"recipeOrder").glob("*.png")]
-        videoFrameList = [path for path in (testDir/"frame30").glob("*.png")]
-
-        ##########################################################################
-        # 動画フレームの画像サイズを検出
-        videoHeight, videoWidth, channel = cv2.imread(str(videoFrameList[0])).shape
 
         # 動画フレームの画像を特徴抽出
-        videoFeatList = np.empty((0, 1000), int)
-        batch = torch.empty(0, channel, videoHeight, videoWidth).to(device)
+        videoFrameFeatList = np.empty((0, 1000), int)
+        for idx, batch in enumerate(videoFrameDataLoader, start=1):
+            with torch.no_grad():
+                feat = model(batch.to(device)).clone().detach().cpu().numpy()
+            videoFrameFeatList = np.vstack([videoFrameFeatList, feat])
+            if idx % 10 == 0:
+                logger.log(30, "{} images are extracted.".format(str(idx * cfg.TEST_BATCH_SIZE)))
 
-        # バッチサイズ分のパスのリストを取得
-        for idx, imagePathBatch in enumerate([videoFrameList[i:i+cfg.TEST_BATCH_SIZE] for i in range(0,len(videoFrameList),cfg.TEST_BATCH_SIZE)], start=1):
-
-        for idx, imagePath in enumerate(videoFrameList, start=1):
-            img = loadImage(imagePath, device)
-            batch = torch.cat((batch, img), dim=0)
-
-            # バッチサイズ分揃ったら、モデルに投げる、投げたら結合する
-            if idx % cfg.TEST_BATCH_SIZE == 0:
-                feat = model(batch).clone().detach().cpu().numpy()
-                videoFeatList = np.vstack([videoFeatList, feat])
-
-                batch = torch.empty(0, channel, videoHeight, videoWidth).to(device)
-
-            if idx % cfg.TEST_BATCH_SIZE*10 == 0:
-                logger.log(30, "{}".format(imagePath))
-                logger.log(30, "{} images are extracted.".format(str(idx)))
-
-        # バッチに収まらなかった残りの分も投げる
-        feat = model(batch).clone().detach().cpu().numpy()
-        videoFeatList = np.vstack([videoFeatList, feat])
-        logger.log(30, "{} images are extracted.".format(str(idx)))
+        logger.log(30, "{} images are extracted.".format(str(len(videoFrameFeatList))))
 
         # 手順画像も特徴抽出
         recipeOrderFeatList = []
         for idx, imagePath in enumerate(recipeOrderImageList, start=1):
             img = loadImage(imagePath, device)
-            feat = model(img).clone().detach().cpu().numpy()
+            with torch.no_grad():
+                feat = model(img).clone().detach().cpu().numpy()
             recipeOrderFeatList.append(feat)
-
-        ##########################################################################
 
         logger.log(30, "Extarcted all features.")
 
         # Init nmslib
         index = nmslib.init(method='hnsw', space='cosinesimil')
-        index.addDataPointBatch(videoFeatList)
-        index.createIndex({'post': 2}, print_progress=True)
+        index.addDataPointBatch(videoFrameFeatList)
+        index.createIndex({'post': 2})
 
         for fileName, recipeOrderFeat in zip(recipeOrderImageList, recipeOrderFeatList):
             ids, distances = index.knnQuery(recipeOrderFeat, k=5)
@@ -124,8 +111,7 @@ def test(logger):
             logger.log(30, ids)
             logger.log(30, distances)
 
-        # 溜まったキャッシュを削除、これしないとOutOfMemoryになる
-        torch.cuda.empty_cache()
+
 
 if __name__ == '__main__':
     # logger
