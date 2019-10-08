@@ -1,11 +1,12 @@
 # ================================================================== #
 # pytorch
 import torch
-# import torchvision
+import torchvision
 # import torch.nn as nn
 import numpy as np
 import torchvision.transforms as transforms
 import cv2
+from PIL import Image
 
 #argparse
 import argparse
@@ -21,7 +22,10 @@ import random
 # You should build your custom dataset as below.
 class TcnDataset(torch.utils.data.Dataset):
     def __init__(self, imageRootDir, jsonDir, frameLengthCSV):
-        self.transform = transforms.Compose([transforms.ToTensor()])
+        self.transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
 
         self.imageRootDir = Path(imageRootDir)
         self.jsonList = Path(jsonDir).glob("*.json")
@@ -55,12 +59,11 @@ class TcnDataset(torch.utils.data.Dataset):
         # 2. Preprocess the data (e.g. torchvision.Transform).
         # 3. Return a data pair (e.g. image and label).
 
-        anchor = cv2.imread(self.anchorPathList[index]).astype(np.float32)
-        anchor = torch.from_numpy(anchor).permute(2,0,1)
+        anchor_path = self.anchorPathList[index]
+        anchor = self.transform(Image.open(anchor_path))
 
         positive_1_Path = self.positivePathList[index]
-        positive_1 = cv2.imread(positive_1_Path).astype(np.float32)
-        positive_1 = torch.from_numpy(positive_1).permute(2,0,1)
+        positive_1 = self.transform(Image.open(positive_1_Path))
 
         positiveIndexNum = int(Path(positive_1_Path).stem)
 
@@ -72,8 +75,7 @@ class TcnDataset(torch.utils.data.Dataset):
                 positive_2_Path = positiveAroundPath
                 break
 
-        positive_2 = cv2.imread(self.positivePathList[index]).astype(np.float32)
-        positive_2 = torch.from_numpy(positive_2).permute(2,0,1)
+        positive_2 = self.transform(Image.open(positive_2_Path))
 
         # negativeの取得 ############
         # 動画のフレームの長さを取得
@@ -101,15 +103,9 @@ class TcnDataset(torch.utils.data.Dataset):
                 negative_2_Path = str(negativePath)
                 break
 
-        negative_1 = cv2.imread(negative_1_Path).astype(np.float32)
-        negative_1 = torch.from_numpy(negative_1).permute(2,0,1)
-        negative_2 = cv2.imread(negative_2_Path).astype(np.float32)
-        negative_2 = torch.from_numpy(negative_2).permute(2,0,1)
+        negative_1 = self.transform(Image.open(negative_1_Path))
+        negative_2 = self.transform(Image.open(negative_2_Path))
 
-        # transforms
-        transform = transforms.Compose([
-            transforms.ToTensor()
-        ])
         # anchor2も作ってData Augmentationはあり
 
         # return self.transform(anchor), self.transform(positive_1), self.transform(positive_2), self.transform(negative_1), self.transform(negative_2)
