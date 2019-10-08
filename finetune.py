@@ -41,21 +41,21 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def quintupletLoss(anchor, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, alpla=0.5):
+def quintupletLoss(anchor, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, alpla=1.0):
     da1p1 = anchor.data.norm() - po_1_feat.data.norm()
     da1n1 = anchor.data.norm() - ne_1_feat.data.norm()
     dp1p2 = po_1_feat.data.norm() - po_2_feat.data.norm()
 
-    loss = max(da1p1 - da1n1 + dp1p2 - alpla, 0)
+    loss = max((da1p1.abs() - da1n1.abs() + dp1p2.abs()).abs() + alpla, 0)
 
     return loss
 
 
-def trapletLoss(a_feat, po_feat, ne_feat, alpla=0.5):
+def tripletLoss(a_feat, po_feat, ne_feat, alpla=1.0):
     d_ap = a_feat.data.norm() - po_feat.data.norm()
     d_an = a_feat.data.norm() - ne_feat.data.norm()
 
-    loss = max(d_ap - d_an + alpla, 0)
+    loss = max((d_ap.abs() - d_an.abs()).abs() + alpla, 0)
 
     return loss
 
@@ -92,11 +92,10 @@ def train():
 
     # dataloader
     tcnDataset = TcnDataset(imageRootDir=args.imageRootDir, jsonDir=args.jsonDir, frameLengthCSV=args.frameLengthCSV)
-    train_loader = torch.utils.data.DataLoader(dataset=tcnDataset, batch_size=batch_size, shuffle=True, num_workers=6)
-    # train_loader = iter(train_loader)
+    train_loader = torch.utils.data.DataLoader(dataset=tcnDataset, batch_size=batch_size, shuffle=True, num_workers=8)
 
     # model
-    model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(384, 384))
+    model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(768, 1024))
     device = torch.device('cuda')
     model = model.to(device)
 
@@ -114,14 +113,24 @@ def train():
         for batch_idx, (anchor, positive_1, positive_2, negative_1, negative_2) in enumerate(train_loader, start=1):
             optimizer.zero_grad()
 
-            sample = [anchor, positive_1, positive_2, negative_1, negative_2]
-            sample = [sample.to(device) for sample in sample]
-            sample_vec = [model(img) for img in sample]
+            batch_negaposi = positive_1
+            batch_negaposi = torch.cat((batch_negaposi, positive_2), dim=0)
+            batch_negaposi = torch.cat((batch_negaposi, negative_1), dim=0)
+            batch_negaposi = torch.cat((batch_negaposi, negative_2), dim=0)
 
-            anchor, positive_1, positive_2, negative_1, negative_2 = sample_vec
+            anchor_vec = model(anchor.to(device))
+            negaposi_vec = model(batch_negaposi.to(device))
 
-            loss = triplet_loss(anchor, positive_1, negative_1)
-            # loss = quintupletLoss(anchor, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat)
+            sample_vec = [torch.unsqueeze(vec, 0).clone().detach() for vec in negaposi_vec]
+            positive_1, positive_2, negative_1, negative_2 = sample_vec
+
+            loss = triplet_loss(anchor_vec, positive_1, negative_1)
+
+            # print(loss)
+            # print(torch.tensor(tripletLoss(anchor_vec, positive_1, negative_1).clone().detach(), requires_grad=True).mean())
+            # print("")
+            # loss = torch.tensor(quintupletLoss(anchor_vec, positive_1, positive_2, negative_1, negative_2), requires_grad=True).mean()
+
             loss.backward()
             optimizer.step()
 
@@ -149,13 +158,13 @@ def train():
         if not len(train_loss) == 1:
             if epoch_loss < min(train_loss[:-1]):
                 logger.log(30, "Minimum loss was {}(epoch{}) -> {}(epoch{})".format(
-                    min(train_loss),
-                    train_loss.index(min(train_loss)),
+                    min(train_loss[:-1]),
+                    train_loss.index(min(train_loss[:-1])),
                     epoch_loss,
                     epoch_idx
                 ))
-                torch.save(model, './ex{}/model_ex{}_epoch{}.ckpt'.format(cfg.NUM_EX, cfg.NUM_EX, str(epoch_idx)))
-                torch.save(model.state_dict(), './ex{}/params_ex{}_epoch{}.ckpt'.format(cfg.NUM_EX, cfg.NUM_EX, str(epoch_idx)))
+        torch.save(model, './ex{}/model_ex{}_epoch{}.ckpt'.format(cfg.NUM_EX, cfg.NUM_EX, str(epoch_idx)))
+        torch.save(model.state_dict(), './ex{}/params_ex{}_epoch{}.ckpt'.format(cfg.NUM_EX, cfg.NUM_EX, str(epoch_idx)))
 
         logger.log(30, "############################################################\n")
 

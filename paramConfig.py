@@ -1,8 +1,8 @@
 from pathlib import Path
 
-EPOCH = 100
+EPOCH = 200
 OPTIMIZER = 'Adam'
-LOG_INTERVAL = 100
+LOG_INTERVAL = 200
 BATCH_SIZE = 1
 NUM_EX = "03"
 GRAPH_PDF = "./ex{}/trian_loss.pdf".format(NUM_EX)
