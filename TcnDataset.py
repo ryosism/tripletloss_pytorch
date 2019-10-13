@@ -23,10 +23,9 @@ import random
 class TcnDataset(torch.utils.data.Dataset):
     def __init__(self, imageRootDir, jsonDir, frameLengthCSV):
         self.transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            transforms.ToTensor()
         ])
-
+    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         self.imageRootDir = Path(imageRootDir)
         self.jsonList = Path(jsonDir).glob("*.json")
         self.jsonList = sorted([jsonPath for jsonPath in self.jsonList])

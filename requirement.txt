@@ -6,6 +6,7 @@ atomicwrites==1.3.0
 attrs==19.1.0
 backcall==0.1.0
 bcolz==1.2.1
+bhtsne==0.1.9
 bleach==3.1.0
 bokeh==1.2.0
 certifi==2019.3.9
@@ -14,10 +15,10 @@ chardet==3.0.4
 Click==7.0
 cloudpickle==1.1.1
 cnn-finetune==0.6.0
-conda==4.6.14
 coverage==4.5.3
 cryptography==2.7
 cycler==0.10.0
+Cython==0.29.13
 cytoolz==0.9.0.1
 dask==1.2.2
 decorator==4.4.0

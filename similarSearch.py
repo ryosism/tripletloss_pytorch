@@ -47,7 +47,7 @@ def loadImage(imagePath, device):
     return img
 
 
-def test(logger):
+def test(logger, epochParamPath):
     # Load testdata
     testDirRoot = Path(cfg.TEST_DIR_ROOT)
     testDirList = testDirRoot.glob("00?")
@@ -56,12 +56,13 @@ def test(logger):
     device = torch.device('cuda')
 
     # Load trained model
-    logger.log(30, "Loading trained model {}.".format(str(Path(cfg.TRAINED_PARAM).name)))
-    model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(384, 384))
-    model.load_state_dict(torch.load(cfg.TRAINED_PARAM))
+    logger.log(30, "Loading trained model {}.".format(str(Path(epochParamPath).name)))
+    model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(768, 1024))
+    paramPathList = Path("./{}")
+    model.load_state_dict(torch.load(epochParamPath))
     model = model.to(device)
     model.eval()
-    logger.log(30, "model {} was loaded.".format(str(Path(cfg.TRAINED_PARAM).name)))
+    logger.log(30, "model {} was loaded.".format(str(Path(epochParamPath).name)))
 
     # Predict the closest frame in all frames
     for testDir in testDirList:
@@ -105,11 +106,23 @@ def test(logger):
         index.addDataPointBatch(videoFrameFeatList)
         index.createIndex({'post': 2})
 
-        for fileName, recipeOrderFeat in zip(recipeOrderImageList, recipeOrderFeatList):
+        queryJson = open("query_{}.json".format(str(testDir.name)), "w")
+        candidateJson = open("candidate_{}.json".format(str(testDir.name)), "w")
+
+        QUERY = []
+        CANDIDATE = []
+
+        for recipeOrderFileName, recipeOrderFeat in zip(recipeOrderImageList, recipeOrderFeatList):
             ids, distances = index.knnQuery(recipeOrderFeat, k=5)
-            logger.log(30, fileName)
+            logger.log(30, recipeOrderFileName)
             logger.log(30, ids)
             logger.log(30, distances)
+
+            CANDIDATE_PER_ORDER = []
+            for id in ids:
+                CANDIDATE_PER_ORDER.append(str(testDir/"frame30") + str(int(id)*30).zfill(5)))
+
+            CANDIDATE.append(CANDIDATE_PER_ORDER)
 
 
 
@@ -125,4 +138,4 @@ if __name__ == '__main__':
     logger.addHandler(sh)
 
     args = parse_arguments()
-    test(logger=logger)
+    test(logger=logger, epochParamPath=cfg.TRAINED_PARAM)
