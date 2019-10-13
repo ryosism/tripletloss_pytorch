@@ -171,7 +171,7 @@ def train():
                         torch.squeeze(anchor).numpy(),
                         torch.squeeze(positive_1).numpy(),
                         torch.squeeze(positive_2).permute(2,1,0).numpy(),
-                        torch.squeeze(negative_1).permute(2,1,0).numpy(),
+                        torch.squeeze(negative_1).numpy(),
                         torch.squeeze(negative_2).permute(2,1,0).numpy()
                     ]
                 )
