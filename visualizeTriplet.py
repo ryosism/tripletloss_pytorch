@@ -50,8 +50,6 @@ def scatter_image(filename, Y, imgList):
     ylim = [feature_y.min()-150, feature_y.max()+150]
 
     for (x, y, img) in zip(feature_x, feature_y, imgList):
-        import pdb; pdb.set_trace()
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         bb = Bbox.from_bounds(x, y, 100, 100)
         bb2 = TransformedBbox(bb, ax.transData)
         bbox_image = BboxImage(bb2, norm=None, origin=None, clip_on=False)

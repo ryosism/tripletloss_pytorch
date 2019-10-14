@@ -114,7 +114,7 @@ def train():
     logger = logging.getLogger('LoggingTest')
     logger.setLevel(20)
 
-    fh = logging.FileHandler('train_log_ex{}.log'.format(cfg.NUM_EX))
+    fh = logging.FileHandler('./log/train_log_ex{}.log'.format(cfg.NUM_EX))
     logger.addHandler(fh)
 
     sh = logging.StreamHandler()
@@ -168,11 +168,11 @@ def train():
                     numOfEpoch=epoch_idx,
                     numOfIdx=batch_idx,
                     imgList=[
-                        torch.squeeze(anchor).numpy(),
-                        torch.squeeze(positive_1).numpy(),
-                        torch.squeeze(positive_2).permute(2,1,0).numpy(),
-                        torch.squeeze(negative_1).numpy(),
-                        torch.squeeze(negative_2).permute(2,1,0).numpy()
+                        torch.squeeze(anchor).permute(1,2,0).numpy(),
+                        torch.squeeze(positive_1).permute(1,2,0).numpy(),
+                        torch.squeeze(positive_2).permute(1,2,0).numpy(),
+                        torch.squeeze(negative_1).permute(1,2,0).numpy(),
+                        torch.squeeze(negative_2).permute(1,2,0).numpy()
                     ]
                 )
 
