@@ -49,8 +49,16 @@ def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numO
     da1p1 = pdist(anchor_feat, po_1_feat)
     da1n1 = pdist(anchor_feat, ne_1_feat)
 
-    swap = pdist(po_1_feat, ne_1_feat)
-    da1n1 = torch.min(swap, da1n1)
+    # swapの実装
+    dp1n1 = pdist(po_1_feat, ne_1_feat)
+    da1n1 = torch.min(dp1n1, da1n1)
+
+    da1p2 = pdist(anchor_feat, po_2_feat)
+    da1p1 = torch.max(da1p1, da1p2)
+
+    da1n2 = pdist(anchor_feat, ne_2_feat)
+    da1n1 = torch.min(da1n1, da1n2)
+    # swapをすることによって一番lossが大きい組み合わせにする
 
     dp1p2 = pdist(po_1_feat, po_2_feat)
 
@@ -73,7 +81,7 @@ def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numO
             )
             with open(str(Path(fileName).stem) + "txt") as f:
                 f.write("da1p1 = {}".format(da1p1))
-                f.write("da1n1 = {}, swap = {}".format(pdist(anchor_feat, ne_1_feat), swap))
+                f.write("da1n1 = {}, swap = {}".format(pdist(anchor_feat, ne_1_feat), dp1n1))
                 f.write("dp1p2 = {}".format(dp1p2))
                 f.write("loss = {}".format(loss))
 
