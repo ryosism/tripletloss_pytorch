@@ -43,7 +43,7 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numOfEx, numOfEpoch, numOfIdx, imgList, alpla=1.0):
+def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numOfEx, numOfEpoch, numOfIdx, imgList, alpla=5.0):
     pdist = nn.PairwiseDistance(p=2, keepdim=True)
 
     da1p1 = pdist(anchor_feat, po_1_feat)
@@ -71,7 +71,7 @@ def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numO
                 fileName=fileName,
                 imgList=imgList
             )
-            with open(str(Path(fileName).stem) + "txt") as f:
+            with open(str(Path(fileName).parent / Path(fileName).stem) + ".txt") as f:
                 f.write("da1p1 = {}".format(da1p1))
                 f.write("da1n1 = {}, swap = {}".format(pdist(anchor_feat, ne_1_feat), swap))
                 f.write("dp1p2 = {}".format(dp1p2))
