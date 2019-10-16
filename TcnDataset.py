@@ -25,7 +25,6 @@ class TcnDataset(torch.utils.data.Dataset):
         self.transform = transforms.Compose([
             transforms.ToTensor()
         ])
-    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         self.imageRootDir = Path(imageRootDir)
         self.jsonList = Path(jsonDir).glob("*.json")
         self.jsonList = sorted([jsonPath for jsonPath in self.jsonList])
@@ -105,9 +104,6 @@ class TcnDataset(torch.utils.data.Dataset):
         negative_1 = self.transform(Image.open(negative_1_Path))
         negative_2 = self.transform(Image.open(negative_2_Path))
 
-        # anchor2も作ってData Augmentationはあり
-
-        # return self.transform(anchor), self.transform(positive_1), self.transform(positive_2), self.transform(negative_1), self.transform(negative_2)
         return anchor, positive_1, positive_2, negative_1, negative_2
 
     def __len__(self):

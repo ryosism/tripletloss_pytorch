@@ -60,30 +60,29 @@ def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numO
     da1n1 = torch.min(da1n1, da1n2)
     # swapをすることによって一番lossが大きい組み合わせにする
 
-    dp1p2 = pdist(po_1_feat, po_2_feat)
-
-    loss = torch.clamp(da1p1 - da1n1 + dp1p2 + alpla, min=0.0)
+    loss = torch.clamp(da1p1 - da1n1 + alpla, min=0.0)
 
     fileName = "./ex{}/scatter_iter{}_idx{}.pdf".format(numOfEx.zfill(2), str(numOfEpoch).zfill(3), str(numOfIdx).zfill(5))
 
-    if int(numOfEpoch) > 10:
-        if loss > 10.0:
-            visualizeTriplet.featToTsne(
-                featList=[
-                    anchor_feat.clone().detach().cpu().numpy().astype(np.float64),
-                    po_1_feat.clone().detach().cpu().numpy().astype(np.float64),
-                    po_2_feat.clone().detach().cpu().numpy().astype(np.float64),
-                    ne_1_feat.clone().detach().cpu().numpy().astype(np.float64),
-                    ne_2_feat.clone().detach().cpu().numpy().astype(np.float64)
-                ],
-                fileName=fileName,
-                imgList=imgList
-            )
-            with open(str(Path(fileName).parent / Path(fileName).stem) + ".txt") as f:
-                f.write("da1p1 = {}".format(da1p1))
-                f.write("da1n1 = {}, swap = {}".format(pdist(anchor_feat, ne_1_feat), dp1n1))
-                f.write("dp1p2 = {}".format(dp1p2))
-                f.write("loss = {}".format(loss))
+    if cfg.TSNE_DEBUG:
+        if int(numOfEpoch) > 0:
+            if loss > 10.0:
+                visualizeTriplet.featToTsne(
+                    featList=[
+                        anchor_feat.clone().detach().cpu().numpy().astype(np.float64),
+                        po_1_feat.clone().detach().cpu().numpy().astype(np.float64),
+                        po_2_feat.clone().detach().cpu().numpy().astype(np.float64),
+                        ne_1_feat.clone().detach().cpu().numpy().astype(np.float64),
+                        ne_2_feat.clone().detach().cpu().numpy().astype(np.float64)
+                    ],
+                    fileName=fileName,
+                    imgList=imgList
+                )
+                with open("./" + str(Path(fileName).parent / Path(fileName).stem) + ".txt", "w") as f:
+                    f.write("da1p1 = {}\n".format(da1p1.item()))
+                    f.write("da1n1 = {}\n, swap = {}".format(pdist(anchor_feat, ne_1_feat).item(), dp1n1.item()))
+                    f.write("dp1p2 = {}\n".format(dp1p2.item()))
+                    f.write("loss = {}\n".format(loss.item()))
 
     return loss
 
