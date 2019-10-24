@@ -43,7 +43,7 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numOfEx, numOfEpoch, numOfIdx, imgList, alpla=5.0):
+def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numOfEx, numOfEpoch, numOfIdx, imgList, alpla=cfg.LOSS_MARGIN):
     pdist = nn.PairwiseDistance(p=2, keepdim=True)
 
     da1p1 = pdist(anchor_feat, po_1_feat)
@@ -87,7 +87,7 @@ def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numO
     return loss
 
 
-def tripletLoss(a_feat, po_feat, ne_feat, alpla=1.0):
+def tripletLoss(a_feat, po_feat, ne_feat, alpla=cfg.LOSS_MARGIN):
     pdist = nn.PairwiseDistance(p=2, keepdim=True)
     d_ap = pdist(a_feat, po_feat)
     d_an = pdist(a_feat, ne_feat)
@@ -140,7 +140,7 @@ def train():
     optimizer = optim.Adam(model.parameters(), lr=0.05)
 
     # loss function
-    triplet_loss = nn.TripletMarginLoss(margin=1.0, p=2, swap=True)
+    triplet_loss = nn.TripletMarginLoss(margin=cfg.LOSS_MARGIN, p=2, swap=True)
 
     train_loss = []
     for epoch_idx in range(1, epochNum+1, 1):
