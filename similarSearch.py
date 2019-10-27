@@ -12,6 +12,7 @@ import argparse
 
 # pathfinder
 from pathlib import Path
+import os
 
 # Dataset
 from similarSearchDataset import *
@@ -22,120 +23,217 @@ from cnn_finetune import make_model
 # parameters
 import paramConfig as cfg
 
-# matplotlib
-import matplotlib.pyplot as plt
-
 # logger
 import logging
 
 # Search Engine
 import nmslib
 
+# json writer
+import json
+
 # ================================================================== #
-
-def parse_arguments():
-    parser = argparse.ArgumentParser()
-
-    return parser.parse_args()
 
 
 def loadImage(imagePath, device):
     img = cv2.imread(str(imagePath)).astype(np.float32)
-    img = torch.from_numpy(img).permute(2,0,1)
+    img = torch.from_numpy(img).permute(2, 0, 1)
     img = torch.unsqueeze(img, 0).to(device)
 
     return img
 
 
-def test(logger, epochParamPath):
-    # Load testdata
-    testDirRoot = Path(cfg.TEST_DIR_ROOT)
-    testDirList = testDirRoot.glob("00?")
+def top5(top5Dist, top5Index, newDist, newIndex, newFileName, top5FileName):
+    for i, dist in enumerate(top5Dist):
+        if float(newDist) < dist:
+            for index in top5Index:
+                if newIndex in range(index - 30, index + 30):
+                    return top5Dist, top5Index, top5FileName
 
+            top5Dist.insert(i, float(newDist))
+            top5Dist.pop(5)
+            top5Index.insert(i, newIndex)
+            top5Index.pop(5)
+            top5FileName.insert(i, os.path.abspath(newFileName))
+            top5FileName.pop(5)
+
+            return top5Dist, top5Index, top5FileName
+
+    return top5Dist, top5Index, top5FileName
+
+
+def test_singleParam_singleVideo(logger, model, paramPath, frameDir, orderDir):
     # Configure GPU
     device = torch.device('cuda')
 
     # Load trained model
-    logger.log(30, "Loading trained model {}.".format(str(Path(epochParamPath).name)))
-    model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(768, 1024))
-    paramPathList = Path("./{}")
-    model.load_state_dict(torch.load(epochParamPath))
+    logger.log(30, "Loading trained model {}.".format(str(paramPath.name)))
+    model.load_state_dict(torch.load(str(paramPath)))
     model = model.to(device)
     model.eval()
-    logger.log(30, "model {} was loaded.".format(str(Path(epochParamPath).name)))
+    logger.log(30, "model {} was loaded.".format(str(paramPath.name)))
+
+    # フレームディレクトリからDataloaderを作成
+    similarSearchDataset = SimilarSearchDataset(videoFramePathDir=frameDir)
+    videoFrameDataLoader = torch.utils.data.DataLoader(
+        dataset=similarSearchDataset,
+        batch_size=cfg.TEST_BATCH_SIZE,
+        shuffle=False,
+        num_workers=6,
+        pin_memory=True
+    )
+
+    # 手順画像は直接リストで作成
+    recipeOrderImageList = [path for path in Path(orderDir).glob("*.png")]
+
+    # 動画フレームの画像を特徴抽出
+    videoFrameFeatList = np.empty((0, 1000), int)
+    for idx, batch in enumerate(videoFrameDataLoader, start=1):
+        with torch.no_grad():
+            feat = model(batch.to(device)).clone().detach().cpu().numpy()
+        videoFrameFeatList = np.vstack([videoFrameFeatList, feat])
+        if idx % 10 == 0:
+            logger.log(30, "{} images are extracted.".format(str(idx * cfg.TEST_BATCH_SIZE)))
+
+    logger.log(30, "{} images are extracted.".format(str(len(videoFrameFeatList))))
+
+    # 手順画像も特徴抽出
+    recipeOrderFeatList = []
+    for idx, imagePath in enumerate(recipeOrderImageList, start=1):
+        img = loadImage(imagePath, device)
+        with torch.no_grad():
+            feat = model(img).clone().detach().cpu().numpy()
+        recipeOrderFeatList.append(feat)
+
+    logger.log(30, "Extarcted all features.")
+
+    # 手順画像ごとに距離が近い動画フレーム画像を検索
+    QUERY = []
+    CANDIDATE = []
+
+    # # Init nmslib
+    # index = nmslib.init(method='hnsw', space='l2')
+    # index.addDataPointBatch(videoFrameFeatList)
+    # index.createIndex({'post': 2})
+    #
+    # for recipeOrderFileName, recipeOrderFeat in zip(recipeOrderImageList, recipeOrderFeatList):
+    #     ids, distances = index.knnQuery(recipeOrderFeat, k=5)
+    #     logger.log(30, recipeOrderFileName)
+    #     logger.log(30, ids)
+    #     logger.log(30, distances)
+    #
+    #     CANDIDATE_PER_ORDER = []
+    #     for id in ids:
+    #         CANDIDATE_PER_ORDER.append(str(Path(frameDir)/"frame30") + str(int(id)*30).zfill(5) + ".png")
+    #
+    #     QUERY.append(recipeOrderFileName)
+    #     CANDIDATE.append(CANDIDATE_PER_ORDER)
+    #
+
+    for recipeOrderFileName, recipeOrderFeat in zip(recipeOrderImageList, recipeOrderFeatList):
+        logger.log(30, recipeOrderFileName)
+
+        top5Dist = [1000000, 1000000, 1000000, 10000000, 10000000]
+        top5Index = [-1, -1, -1, -1, -1]
+        top5FileName = ["", "", "", "", ""]
+
+        for idx, videoFrameFeat in enumerate(videoFrameFeatList, start=1):
+            dist = np.linalg.norm(recipeOrderFeat - videoFrameFeat)
+            videoFrameFileName = str(Path(frameDir)) + "/" + str(int(idx) * 30).zfill(5) + ".png"
+            top5Dist, top5Index, top5FileName = top5(
+                top5Dist=top5Dist,
+                top5Index=top5Index,
+                newDist=dist,
+                newIndex=idx,
+                newFileName=videoFrameFileName,
+                top5FileName=top5FileName
+            )
+
+        for fileName, dist in zip(top5FileName, top5Dist):
+            logger.log(30, "【{}】 {}".format(dist, fileName))
+
+        QUERY.append(recipeOrderFileName)
+        CANDIDATE.append(top5FileName)
+
+        #     if dist < minDist:
+        #         minIdx = idx
+        #         minDist = dist
+        #
+        # minDistVideoFrameName = str(Path(frameDir)/"frame30") + str(int(minIdx)*30).zfill(5) + ".png"
+        # minDistVideoFrameDist = minDist
+
+    return QUERY, CANDIDATE
+
+
+def test_singleParam_allVideos(logger, epochParamPath):
+    # Init JSON object
+    JSON = []
+
+    # Load testdata
+    testDirRoot = Path(cfg.TEST_DIR_ROOT)
+    testDirList = testDirRoot.glob("00?")
+
+    model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(768, 1024))
 
     # Predict the closest frame in all frames
     for testDir in testDirList:
+        frameDir = str(testDir / "frame30")
+        orderDir = str(testDir / "recipeOrder")
+        QUERY, CANDIDATE = test_singleParam_singleVideo(
+            logger=logger, model=model, paramPath=epochParamPath, frameDir=frameDir, orderDir=orderDir)
+        JSON.append(CANDIDATE)
 
-        # フレームディレクトリからDataloaderを作成
-        similarSearchDataset = SimilarSearchDataset(videoFramePathDir=str(testDir/"frame30"))
-        videoFrameDataLoader = torch.utils.data.DataLoader(
-            dataset=similarSearchDataset,
-            batch_size=cfg.TEST_BATCH_SIZE,
-            shuffle=False,
-            num_workers=6,
-            pin_memory=True
-        )
+    return QUERY, JSON
 
-        # 手順画像は直接リストで作成
-        recipeOrderImageList = [path for path in (testDir/"recipeOrder").glob("*.png")]
 
-        # 動画フレームの画像を特徴抽出
-        videoFrameFeatList = np.empty((0, 1000), int)
-        for idx, batch in enumerate(videoFrameDataLoader, start=1):
-            with torch.no_grad():
-                feat = model(batch.to(device)).clone().detach().cpu().numpy()
-            videoFrameFeatList = np.vstack([videoFrameFeatList, feat])
-            if idx % 10 == 0:
-                logger.log(30, "{} images are extracted.".format(str(idx * cfg.TEST_BATCH_SIZE)))
+def test_allParams_singleVideo(logger, paramDirPath, testDirPath):
+    # Init JSON object
+    JSON = []
 
-        logger.log(30, "{} images are extracted.".format(str(len(videoFrameFeatList))))
+    model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(768, 1024))
 
-        # 手順画像も特徴抽出
-        recipeOrderFeatList = []
-        for idx, imagePath in enumerate(recipeOrderImageList, start=1):
-            img = loadImage(imagePath, device)
-            with torch.no_grad():
-                feat = model(img).clone().detach().cpu().numpy()
-            recipeOrderFeatList.append(feat)
+    # Predict the closest frame in all frames
+    paramPathList = sorted(Path(paramDirPath).glob("params*"))
 
-        logger.log(30, "Extarcted all features.")
+    for paramPath in paramPathList:
+        frameDir = str(testDirPath / "frame30")
+        orderDir = str(testDirPath / "recipeOrder")
+        QUERY, CANDIDATE = test_singleParam_singleVideo(
+            logger=logger, model=model, paramPath=paramPath, frameDir=frameDir, orderDir=orderDir)
+        JSON.append(CANDIDATE)
 
-        # Init nmslib
-        index = nmslib.init(method='hnsw', space='cosinesimil')
-        index.addDataPointBatch(videoFrameFeatList)
-        index.createIndex({'post': 2})
+    return QUERY, JSON
 
-        queryJson = open("query_{}.json".format(str(testDir.name)), "w")
-        candidateJson = open("candidate_{}.json".format(str(testDir.name)), "w")
 
-        QUERY = []
-        CANDIDATE = []
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--paramDirPath', '-p', help='Path to ParamDirPath')
+    parser.add_argument('--testDirPath', '-t', help='Path to testDirPath')
 
-        for recipeOrderFileName, recipeOrderFeat in zip(recipeOrderImageList, recipeOrderFeatList):
-            ids, distances = index.knnQuery(recipeOrderFeat, k=5)
-            logger.log(30, recipeOrderFileName)
-            logger.log(30, ids)
-            logger.log(30, distances)
-
-            CANDIDATE_PER_ORDER = []
-            for id in ids:
-                CANDIDATE_PER_ORDER.append(str(testDir/"frame30") + str(int(id)*30).zfill(5)))
-
-            CANDIDATE.append(CANDIDATE_PER_ORDER)
-
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
+    if Path(cfg.LOGFILE).exists():
+        Path(cfg.LOGFILE).unlink()
+
     # logger
     logger = logging.getLogger('LoggingTest')
     logger.setLevel(20)
-
-    fh = logging.FileHandler('test_log_ex{}.log'.format(cfg.NUM_EX))
+    fh = logging.FileHandler(cfg.LOGFILE)
     logger.addHandler(fh)
-
     sh = logging.StreamHandler()
     logger.addHandler(sh)
 
     args = parse_arguments()
-    test(logger=logger, epochParamPath=cfg.TRAINED_PARAM)
+
+    queryJson = open("query_{}.json".format(str(Path(args.testDirPath).name)), "w")
+    candidateJson = open("candidate_{}.json".format(str(Path(args.testDirPath).name)), "w")
+
+    QUERY, CANDIDATE = test_allParams_singleVideo(logger=logger, paramDirPath=Path(
+        args.paramDirPath), testDirPath=Path(args.testDirPath))
+    json.dump(QUERY, queryJson, indent=4, ensure_ascii=False, separators=(',', ': '))
+    json.dump(CANDIDATE, candidateJson, indent=4, ensure_ascii=False, separators=(',', ': '))
+
+    queryJson.close()
+    candidateJson.close()
