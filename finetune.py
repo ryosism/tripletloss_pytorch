@@ -81,7 +81,6 @@ def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numO
                 with open("./" + str(Path(fileName).parent / Path(fileName).stem) + ".txt", "w") as f:
                     f.write("da1p1 = {}\n".format(da1p1.item()))
                     f.write("da1n1 = {}\n, swap = {}".format(pdist(anchor_feat, ne_1_feat).item(), dp1n1.item()))
-                    f.write("dp1p2 = {}\n".format(dp1p2.item()))
                     f.write("loss = {}\n".format(loss.item()))
 
     return loss
@@ -121,7 +120,7 @@ def train():
     logger = logging.getLogger('LoggingTest')
     logger.setLevel(20)
 
-    fh = logging.FileHandler('./log/train_log_ex{}.log'.format(cfg.NUM_EX))
+    fh = logging.FileHandler('./log/train_log_ex{}.log'.format(cfg.NUM_TRAINEX))
     logger.addHandler(fh)
 
     sh = logging.StreamHandler()
@@ -132,7 +131,7 @@ def train():
     train_loader = torch.utils.data.DataLoader(dataset=tcnDataset, batch_size=batch_size, shuffle=True, num_workers=8)
 
     # model
-    model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(768, 1024))
+    model = make_model('inception_v3', num_classes=1000, pretrained=True, input_size=(768, 1024))
     device = torch.device('cuda')
     model = model.to(device)
 
@@ -171,7 +170,7 @@ def train():
                     positive_2_vec,
                     negative_1_vec,
                     negative_2_vec,
-                    numOfEx=cfg.NUM_EX,
+                    numOfEx=cfg.NUM_TRAINEX,
                     numOfEpoch=epoch_idx,
                     numOfIdx=batch_idx,
                     imgList=[
@@ -215,8 +214,8 @@ def train():
                     epoch_loss,
                     epoch_idx
                 ))
-        torch.save(model, './ex{}/model_ex{}_epoch{}.ckpt'.format(cfg.NUM_EX, cfg.NUM_EX, str(epoch_idx)))
-        torch.save(model.state_dict(), './ex{}/params_ex{}_epoch{}.ckpt'.format(cfg.NUM_EX, cfg.NUM_EX, str(epoch_idx)))
+        torch.save(model, './ex{}/model_ex{}_epoch{}.ckpt'.format(cfg.NUM_TRAINEX, cfg.NUM_TRAINEX, str(epoch_idx).zfill(3)))
+        torch.save(model.state_dict(), './ex{}/params_ex{}_epoch{}.ckpt'.format(cfg.NUM_TRAINEX, cfg.NUM_TRAINEX, str(epoch_idx).zfill(3)))
 
         logger.log(30, "############################################################\n")
 
@@ -226,6 +225,6 @@ def train():
 
 if __name__ == '__main__':
     args = parse_arguments()
-    if not Path("./ex{}".format(str(cfg.NUM_EX).zfill(2))).exists():
-        Path("./ex{}".format(str(cfg.NUM_EX).zfill(2))).mkdir(parents=True)
+    if not Path("./ex{}".format(str(cfg.NUM_TRAINEX).zfill(2))).exists():
+        Path("./ex{}".format(str(cfg.NUM_TRAINEX).zfill(2))).mkdir(parents=True)
     train()
