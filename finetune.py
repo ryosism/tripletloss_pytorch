@@ -15,7 +15,7 @@ import argparse
 from pathlib import Path
 
 # Dataset
-from TcnDataset import *
+from TcnDataset import TcnDataset
 
 # pretrained models
 from cnn_finetune import make_model
@@ -131,7 +131,7 @@ def train():
     train_loader = torch.utils.data.DataLoader(dataset=tcnDataset, batch_size=batch_size, shuffle=True, num_workers=8)
 
     # model
-    model = make_model('inception_v3', num_classes=1000, pretrained=True, input_size=(768, 1024))
+    model = make_model('inception_v3', num_classes=128, pretrained=True, input_size=(768, 1024))
     device = torch.device('cuda')
     model = model.to(device)
 
