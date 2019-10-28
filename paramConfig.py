@@ -1,6 +1,6 @@
 from pathlib import Path
 
-NUM_TRAINEX = "17"
+NUM_TRAINEX = "18"
 EPOCH = 500
 OPTIMIZER = 'Adam'
 LOG_INTERVAL = 200
