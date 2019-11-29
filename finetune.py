@@ -29,6 +29,7 @@ import visualizeTriplet
 
 # logger
 import logging
+import time
 
 # ================================================================== #
 
@@ -115,6 +116,7 @@ def train():
     epochNum = cfg.EPOCH
     log_interval = cfg.LOG_INTERVAL
     batch_size = cfg.BATCH_SIZE
+    img_size = cfg.IMG_SIZE
 
     # logger
     logger = logging.getLogger('LoggingTest')
@@ -127,16 +129,16 @@ def train():
     logger.addHandler(sh)
 
     # dataloader
-    tcnDataset = TcnDataset(imageRootDir=args.imageRootDir, jsonDir=args.jsonDir, frameLengthCSV=args.frameLengthCSV)
+    tcnDataset = TcnDataset(imageRootDir=args.imageRootDir, jsonDir=args.jsonDir, frameLengthCSV=args.frameLengthCSV, anchorSize=img_size)
     train_loader = torch.utils.data.DataLoader(dataset=tcnDataset, batch_size=batch_size, shuffle=True, num_workers=8)
 
     # model
-    model = make_model('inception_v3', num_classes=128, pretrained=True, input_size=(768, 1024))
+    model = make_model('inception_v3', num_classes=cfg.NET_DIMENTIONS, pretrained=True, input_size=img_size)
     device = torch.device('cuda')
     model = model.to(device)
 
     # optimizer
-    optimizer = optim.Adam(model.parameters(), lr=0.05)
+    optimizer = optim.Adam(model.parameters(), lr=0.005)
 
     # loss function
     triplet_loss = nn.TripletMarginLoss(margin=cfg.LOSS_MARGIN, p=2, swap=True)
@@ -144,57 +146,66 @@ def train():
     train_loss = []
     for epoch_idx in range(1, epochNum+1, 1):
         model.train()
+
+        epochStartTime = time.time()
+
         interval_loss_sum = 0
         epoch_loss_sum = 0
-        for batch_idx, (anchor, positive_1, positive_2, negative_1, negative_2) in enumerate(train_loader, start=1):
+        for batch_idx, (anchor_batch, positive_1_batch, positive_2_batch, negative_1_batch, negative_2_batch) in enumerate(train_loader, start=1):
             optimizer.zero_grad()
 
-            batch_negaposi = positive_1
-            batch_negaposi = torch.cat((batch_negaposi, positive_2), dim=0)
-            batch_negaposi = torch.cat((batch_negaposi, negative_1), dim=0)
-            batch_negaposi = torch.cat((batch_negaposi, negative_2), dim=0)
+            # この処理によって、batch_negaposiはtorch.Size([4 * batchsize, 3, height, width])になっている
+            batch_negaposi = positive_1_batch
+            batch_negaposi = torch.cat((batch_negaposi, positive_2_batch), dim=0)
+            batch_negaposi = torch.cat((batch_negaposi, negative_1_batch), dim=0)
+            batch_negaposi = torch.cat((batch_negaposi, negative_2_batch), dim=0)
 
-            anchor_vec = model(anchor.to(device))
-            negaposi_vec = model(batch_negaposi.to(device))
+            anchor_vec_batch = model(anchor_batch.to(device))
+            negaposi_vec_batch = model(batch_negaposi.to(device))
 
-            sample_vec = [torch.unsqueeze(vec, 0) for vec in negaposi_vec]
-            positive_1_vec, positive_2_vec, negative_1_vec, negative_2_vec = sample_vec
+            sample_vec_batch = [torch.unsqueeze(vec, 0) for vec in negaposi_vec_batch]
 
-            if args.lossfunc == 'tripletloss':
-                # loss = triplet_loss(anchor_vec, positive_1_vec, negative_1_vec)
-                loss = tripletLoss(a_feat=anchor_vec, po_feat=positive_1_vec, ne_feat=negative_1_vec)
-            else:
-                loss = quintupletLoss(
-                    anchor_vec,
-                    positive_1_vec,
-                    positive_2_vec,
-                    negative_1_vec,
-                    negative_2_vec,
-                    numOfEx=cfg.NUM_TRAINEX,
-                    numOfEpoch=epoch_idx,
-                    numOfIdx=batch_idx,
-                    imgList=[
-                        torch.squeeze(anchor).permute(1,2,0).numpy(),
-                        torch.squeeze(positive_1).permute(1,2,0).numpy(),
-                        torch.squeeze(positive_2).permute(1,2,0).numpy(),
-                        torch.squeeze(negative_1).permute(1,2,0).numpy(),
-                        torch.squeeze(negative_2).permute(1,2,0).numpy()
-                    ]
-                )
+            positive_1_vec_batch, positive_2_vec_batch, negative_1_vec_batch, negative_2_vec_batch = zip(*[iter(sample_vec_batch)] * batch_size)
 
-            loss.backward()
+            all_loss = 0
+            for anchor_vec, positive_1_vec, positive_2_vec, negative_1_vec, negative_2_vec in zip(anchor_vec_batch, positive_1_vec_batch, positive_2_vec_batch, negative_1_vec_batch, negative_2_vec_batch):
+                if args.lossfunc == 'tripletloss':
+                    # loss = triplet_loss(anchor_vec, positive_1_vec, negative_1_vec)
+                    loss = tripletLoss(a_feat=anchor_vec, po_feat=positive_1_vec, ne_feat=negative_1_vec)
+                else:
+                    loss = quintupletLoss(
+                        anchor_vec,
+                        positive_1_vec,
+                        positive_2_vec,
+                        negative_1_vec,
+                        negative_2_vec,
+                        numOfEx=cfg.NUM_TRAINEX,
+                        numOfEpoch=epoch_idx,
+                        numOfIdx=batch_idx,
+                        imgList=[
+                            torch.squeeze(anchor_batch[0]).permute(1,2,0).numpy(),
+                            torch.squeeze(positive_1_batch[0]).permute(1,2,0).numpy(),
+                            torch.squeeze(positive_2_batch[0]).permute(1,2,0).numpy(),
+                            torch.squeeze(negative_1_batch[0]).permute(1,2,0).numpy(),
+                            torch.squeeze(negative_2_batch[0]).permute(1,2,0).numpy()
+                        ]
+                    )
+                all_loss = all_loss + loss
+
+            all_loss = all_loss/batch_size
+            all_loss.backward()
             optimizer.step()
 
-            interval_loss_sum = interval_loss_sum + loss.clone().detach().item()
-            epoch_loss_sum = epoch_loss_sum + loss.clone().detach().item()
+            interval_loss_sum = interval_loss_sum + all_loss.clone().detach().item()
+            epoch_loss_sum = epoch_loss_sum + all_loss.clone().detach().item()
 
-            if batch_idx % log_interval == 0:
+            if batch_idx*batch_size % log_interval == 0:
                 logger.log(30, 'Train Epoch: {} [{}/{} ({:.0f}%)]\tAverage Loss:{}'.format(
                     epoch_idx,
                     batch_idx * batch_size,
                     len(train_loader.dataset),
                     100. * batch_idx / len(train_loader),
-                    interval_loss_sum/log_interval
+                    interval_loss_sum * batch_size / log_interval
                 ))
                 interval_loss_sum = 0
 
@@ -217,6 +228,8 @@ def train():
         torch.save(model, './ex{}/model_ex{}_epoch{}.ckpt'.format(cfg.NUM_TRAINEX, cfg.NUM_TRAINEX, str(epoch_idx).zfill(3)))
         torch.save(model.state_dict(), './ex{}/params_ex{}_epoch{}.ckpt'.format(cfg.NUM_TRAINEX, cfg.NUM_TRAINEX, str(epoch_idx).zfill(3)))
 
+        epochEndTime = time.time()
+        logger.log(30, "Epoch Time : {}(sec)".format(int(epochEndTime - epochStartTime)))
         logger.log(30, "############################################################\n")
 
 

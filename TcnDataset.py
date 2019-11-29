@@ -21,11 +21,13 @@ import random
 
 # You should build your custom dataset as below.
 class TcnDataset(torch.utils.data.Dataset):
-    def __init__(self, imageRootDir, jsonDir, frameLengthCSV):
+    def __init__(self, imageRootDir, jsonDir, frameLengthCSV, anchorSize):
         self.transform = transforms.Compose([
+            transforms.Resize(anchorSize),
             transforms.ToTensor()
         ])
         self.imageRootDir = Path(imageRootDir)
+        self.anchorSize = anchorSize
         self.jsonList = Path(jsonDir).glob("*.json")
         self.jsonList = sorted([jsonPath for jsonPath in self.jsonList])
 
@@ -122,7 +124,7 @@ def main():
     args = parse_arguments()
     tcnDataset = TcnDataset(imageRootDir=args.imageRootDir, jsonDir=args.jsonDir, frameLengthCSV=args.frameLengthCSV)
 
-    train_loader = torch.utils.data.DataLoader(dataset=tcnDataset,batch_size=1,shuffle=False)
+    train_loader = torch.utils.data.DataLoader(dataset=tcnDataset,batch_size=4,shuffle=False, num_workers=8)
     train_loader = iter(train_loader)
 
     for batch_idx, (anchor, positive_1, positive_2, negative_1, negative_2) in enumerate(train_loader):
