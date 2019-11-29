@@ -15,7 +15,8 @@ from pathlib import Path
 import os
 
 # Dataset
-from similarSearchDataset import *
+from similarSearchDataset import SimilarSearchDataset
+import cv2
 
 # pretrained models
 from cnn_finetune import make_model
@@ -33,7 +34,6 @@ import nmslib
 import json
 
 # ================================================================== #
-
 
 def loadImage(imagePath, device):
     img = cv2.imread(str(imagePath)).astype(np.float32)
@@ -54,7 +54,7 @@ def top5(top5Dist, top5Index, newDist, newIndex, newFileName, top5FileName):
             top5Dist.pop(5)
             top5Index.insert(i, newIndex)
             top5Index.pop(5)
-            top5FileName.insert(i, os.path.abspath(newFileName))
+            top5FileName.insert(i, str(os.path.abspath(newFileName)))
             top5FileName.pop(5)
 
             return top5Dist, top5Index, top5FileName
@@ -87,7 +87,7 @@ def test_singleParam_singleVideo(logger, model, paramPath, frameDir, orderDir):
     recipeOrderImageList = [path for path in Path(orderDir).glob("*.png")]
 
     # 動画フレームの画像を特徴抽出
-    videoFrameFeatList = np.empty((0, 1000), int)
+    videoFrameFeatList = np.empty((0, int(cfg.TEST_NET_DIMENTIONS)), int)
     for idx, batch in enumerate(videoFrameDataLoader, start=1):
         with torch.no_grad():
             feat = model(batch.to(device)).clone().detach().cpu().numpy()
@@ -108,8 +108,8 @@ def test_singleParam_singleVideo(logger, model, paramPath, frameDir, orderDir):
     logger.log(30, "Extarcted all features.")
 
     # 手順画像ごとに距離が近い動画フレーム画像を検索
-    QUERY = []
-    CANDIDATE = []
+    query = []
+    candidate = []
 
     # # Init nmslib
     # index = nmslib.init(method='hnsw', space='l2')
@@ -152,8 +152,8 @@ def test_singleParam_singleVideo(logger, model, paramPath, frameDir, orderDir):
         for fileName, dist in zip(top5FileName, top5Dist):
             logger.log(30, "【{}】 {}".format(dist, fileName))
 
-        QUERY.append(recipeOrderFileName)
-        CANDIDATE.append(top5FileName)
+        query.append(str(recipeOrderFileName))
+        candidate.append(top5FileName)
 
         #     if dist < minDist:
         #         minIdx = idx
@@ -162,7 +162,7 @@ def test_singleParam_singleVideo(logger, model, paramPath, frameDir, orderDir):
         # minDistVideoFrameName = str(Path(frameDir)/"frame30") + str(int(minIdx)*30).zfill(5) + ".png"
         # minDistVideoFrameDist = minDist
 
-    return QUERY, CANDIDATE
+    return query, candidate
 
 
 def test_singleParam_allVideos(logger, epochParamPath):
@@ -173,7 +173,7 @@ def test_singleParam_allVideos(logger, epochParamPath):
     testDirRoot = Path(cfg.TEST_DIR_ROOT)
     testDirList = testDirRoot.glob("00?")
 
-    model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(768, 1024))
+    model = make_model('inception_v3', num_classes=cfg.TEST_NET_DIMENTIONS, pretrained=True, input_size=cfg.TEST_IMG_SIZE)
 
     # Predict the closest frame in all frames
     for testDir in testDirList:
@@ -190,7 +190,7 @@ def test_allParams_singleVideo(logger, paramDirPath, testDirPath):
     # Init JSON object
     JSON = []
 
-    model = make_model('inception_v4', num_classes=1000, pretrained=True, input_size=(768, 1024))
+    model = make_model('inception_v3', num_classes=cfg.TEST_NET_DIMENTIONS, pretrained=True, input_size=cfg.TEST_IMG_SIZE)
 
     # Predict the closest frame in all frames
     paramPathList = sorted(Path(paramDirPath).glob("params*"))
@@ -227,13 +227,10 @@ if __name__ == '__main__':
 
     args = parse_arguments()
 
-    queryJson = open("query_{}.json".format(str(Path(args.testDirPath).name)), "w")
-    candidateJson = open("candidate_{}.json".format(str(Path(args.testDirPath).name)), "w")
+    QUERY, CANDIDATE = test_allParams_singleVideo(logger=logger, paramDirPath=Path(args.paramDirPath), testDirPath=Path(args.testDirPath))
 
-    QUERY, CANDIDATE = test_allParams_singleVideo(logger=logger, paramDirPath=Path(
-        args.paramDirPath), testDirPath=Path(args.testDirPath))
-    json.dump(QUERY, queryJson, indent=4, ensure_ascii=False, separators=(',', ': '))
-    json.dump(CANDIDATE, candidateJson, indent=4, ensure_ascii=False, separators=(',', ': '))
+    with open("./ex{}/query_{}.json".format(str(cfg.NUM_TESTEX).zfill(2), str(Path(args.testDirPath).name)), "w") as f:
+        json.dump(QUERY, f, indent=4, ensure_ascii=False, separators=(',', ': '))
 
-    queryJson.close()
-    candidateJson.close()
+    with open("./ex{}/candidate_{}.json".format(str(cfg.NUM_TESTEX).zfill(2), str(Path(args.testDirPath).name)), "w") as f:
+        json.dump(CANDIDATE, f, indent=4, ensure_ascii=False, separators=(',', ': '))
