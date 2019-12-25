@@ -178,7 +178,7 @@ def test_singleParam_allVideos(logger, epochParamPath):
     # Predict the closest frame in all frames
     for testDir in testDirList:
         frameDir = str(testDir / "frame30")
-        orderDir = str(testDir / "recipeOrder")
+        orderDir = str(testDir / "orderImages")
         QUERY, CANDIDATE = test_singleParam_singleVideo(
             logger=logger, model=model, paramPath=epochParamPath, frameDir=frameDir, orderDir=orderDir)
         JSON.append(CANDIDATE)
@@ -197,7 +197,7 @@ def test_allParams_singleVideo(logger, paramDirPath, testDirPath):
 
     for paramPath in paramPathList:
         frameDir = str(testDirPath / "frame30")
-        orderDir = str(testDirPath / "recipeOrder")
+        orderDir = str(testDirPath / "orderImages")
         QUERY, CANDIDATE = test_singleParam_singleVideo(
             logger=logger, model=model, paramPath=paramPath, frameDir=frameDir, orderDir=orderDir)
         JSON.append(CANDIDATE)

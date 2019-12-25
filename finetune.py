@@ -44,45 +44,25 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, numOfEx, numOfEpoch, numOfIdx, imgList, alpla=cfg.LOSS_MARGIN):
+def quintupletLoss(anchor_feat, po_1_feat, po_2_feat, ne_1_feat, ne_2_feat, alpla=cfg.LOSS_MARGIN):
     pdist = nn.PairwiseDistance(p=2, keepdim=True)
 
     da1p1 = pdist(anchor_feat, po_1_feat)
     da1n1 = pdist(anchor_feat, ne_1_feat)
 
-    # swapの実装
-    dp1n1 = pdist(po_1_feat, ne_1_feat)
-    da1n1 = torch.min(dp1n1, da1n1)
+    if cfg.ENABLE_SWAP:
+        # swapの実装
+        dp1n1 = pdist(po_1_feat, ne_1_feat)
+        da1n1 = torch.min(dp1n1, da1n1)
 
-    da1p2 = pdist(anchor_feat, po_2_feat)
-    da1p1 = torch.max(da1p1, da1p2)
+        da1p2 = pdist(anchor_feat, po_2_feat)
+        da1p1 = torch.max(da1p1, da1p2)
 
-    da1n2 = pdist(anchor_feat, ne_2_feat)
-    da1n1 = torch.min(da1n1, da1n2)
-    # swapをすることによって一番lossが大きい組み合わせにする
+        da1n2 = pdist(anchor_feat, ne_2_feat)
+        da1n1 = torch.min(da1n1, da1n2)
+        # swapをすることによって一番lossが大きい組み合わせにする
 
     loss = torch.clamp(da1p1 - da1n1 + alpla, min=0.0)
-
-    fileName = "./ex{}/scatter_iter{}_idx{}.pdf".format(numOfEx.zfill(2), str(numOfEpoch).zfill(3), str(numOfIdx).zfill(5))
-
-    if cfg.TSNE_DEBUG:
-        if int(numOfEpoch) > 0:
-            if loss > 10.0:
-                visualizeTriplet.featToTsne(
-                    featList=[
-                        anchor_feat.clone().detach().cpu().numpy().astype(np.float64),
-                        po_1_feat.clone().detach().cpu().numpy().astype(np.float64),
-                        po_2_feat.clone().detach().cpu().numpy().astype(np.float64),
-                        ne_1_feat.clone().detach().cpu().numpy().astype(np.float64),
-                        ne_2_feat.clone().detach().cpu().numpy().astype(np.float64)
-                    ],
-                    fileName=fileName,
-                    imgList=imgList
-                )
-                with open("./" + str(Path(fileName).parent / Path(fileName).stem) + ".txt", "w") as f:
-                    f.write("da1p1 = {}\n".format(da1p1.item()))
-                    f.write("da1n1 = {}\n, swap = {}".format(pdist(anchor_feat, ne_1_feat).item(), dp1n1.item()))
-                    f.write("loss = {}\n".format(loss.item()))
 
     return loss
 
@@ -138,10 +118,10 @@ def train():
     model = model.to(device)
 
     # optimizer
-    optimizer = optim.Adam(model.parameters(), lr=0.005)
+    optimizer = optim.Adam(model.parameters(), lr=0.05)
 
     # loss function
-    triplet_loss = nn.TripletMarginLoss(margin=cfg.LOSS_MARGIN, p=2, swap=True)
+    # triplet_loss = nn.TripletMarginLoss(margin=cfg.LOSS_MARGIN, p=2, swap=True)
 
     train_loss = []
     for epoch_idx in range(1, epochNum+1, 1):
@@ -179,17 +159,29 @@ def train():
                         positive_2_vec,
                         negative_1_vec,
                         negative_2_vec,
-                        numOfEx=cfg.NUM_TRAINEX,
-                        numOfEpoch=epoch_idx,
-                        numOfIdx=batch_idx,
-                        imgList=[
-                            torch.squeeze(anchor_batch[0]).permute(1,2,0).numpy(),
-                            torch.squeeze(positive_1_batch[0]).permute(1,2,0).numpy(),
-                            torch.squeeze(positive_2_batch[0]).permute(1,2,0).numpy(),
-                            torch.squeeze(negative_1_batch[0]).permute(1,2,0).numpy(),
-                            torch.squeeze(negative_2_batch[0]).permute(1,2,0).numpy()
-                        ]
                     )
+
+                    if cfg.TSNE_DEBUG:
+                        fileName = "./ex{}/scatter_iter{}_idx{}.pdf".format(cfg.NUM_TRAINEX.zfill(2), str(epoch_idx).zfill(3), str(batch_idx).zfill(5))
+                        if int(epoch_idx) > 0:
+                            if loss > 10.0:
+                                visualizeTriplet.featToTsne(
+                                    featList=[
+                                        anchor_vec.clone().detach().cpu().numpy().astype(np.float64),
+                                        positive_1_vec.clone().detach().cpu().numpy().astype(np.float64),
+                                        positive_2_vec.clone().detach().cpu().numpy().astype(np.float64),
+                                        negative_1_vec.clone().detach().cpu().numpy().astype(np.float64),
+                                        negative_2_vec.clone().detach().cpu().numpy().astype(np.float64)
+                                    ],
+                                    fileName=fileName,
+                                    imgList=[
+                                        torch.squeeze(anchor_batch[0]).permute(1,2,0).numpy(),
+                                        torch.squeeze(positive_1_batch[0]).permute(1,2,0).numpy(),
+                                        torch.squeeze(positive_2_batch[0]).permute(1,2,0).numpy(),
+                                        torch.squeeze(negative_1_batch[0]).permute(1,2,0).numpy(),
+                                        torch.squeeze(negative_2_batch[0]).permute(1,2,0).numpy()
+                                    ]
+                                )
                 all_loss = all_loss + loss
 
             all_loss = all_loss/batch_size

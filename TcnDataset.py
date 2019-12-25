@@ -70,7 +70,7 @@ class TcnDataset(torch.utils.data.Dataset):
         while(1):
             # positiveから50フレームまでの距離も実質positiveに
             positiveRandIndexNum = random.choice(range(positiveIndexNum - 50, positiveIndexNum + 50, 10))
-            positiveAroundPath = Path(str(Path(positive_1_Path).parent)+"/"+str(positiveRandIndexNum).zfill(5)+".png")
+            positiveAroundPath = Path(str(Path(positive_1_Path).parent)+"/"+str(positiveRandIndexNum).zfill(7)+".png")
             if Path(positiveAroundPath).exists():
                 positive_2_Path = positiveAroundPath
                 break
@@ -91,14 +91,14 @@ class TcnDataset(torch.utils.data.Dataset):
 
         while(1):
             negativeIndexNum = random.choice(negativeRange)
-            negativePath = Path(str(Path(positive_1_Path).parent)+"/"+str(negativeIndexNum).zfill(5)+".png")
+            negativePath = Path(str(Path(positive_1_Path).parent)+"/"+str(negativeIndexNum).zfill(7)+".png")
             if Path(negativePath).exists():
                 negative_1_Path = str(negativePath)
                 break
 
         while(1):
             negativeIndexNum = random.choice(negativeRange)
-            negativePath = Path(str(Path(positive_1_Path).parent)+"/"+str(negativeIndexNum).zfill(5)+".png")
+            negativePath = Path(str(Path(positive_1_Path).parent)+"/"+str(negativeIndexNum).zfill(7)+".png")
             if Path(negativePath).exists():
                 negative_2_Path = str(negativePath)
                 break
