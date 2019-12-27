@@ -118,7 +118,7 @@ def train():
     model = model.to(device)
 
     # optimizer
-    optimizer = optim.Adam(model.parameters(), lr=0.05)
+    optimizer = optim.Adam(model.parameters(), lr=cfg.LEARNING_RATE)
 
     # loss function
     # triplet_loss = nn.TripletMarginLoss(margin=cfg.LOSS_MARGIN, p=2, swap=True)
@@ -191,7 +191,7 @@ def train():
             interval_loss_sum = interval_loss_sum + all_loss.clone().detach().item()
             epoch_loss_sum = epoch_loss_sum + all_loss.clone().detach().item()
 
-            if batch_idx*batch_size % log_interval == 0:
+            if batch_idx * batch_size % log_interval == 0:
                 logger.log(30, 'Train Epoch: {} [{}/{} ({:.0f}%)]\tAverage Loss:{}'.format(
                     epoch_idx,
                     batch_idx * batch_size,
