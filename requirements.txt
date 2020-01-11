@@ -45,9 +45,6 @@ joblib==0.14.0
 jsonschema==3.0.2
 jupyter-client==5.3.3
 jupyter-core==4.5.0
--e git://github.com/keras-team/keras.git@f0464c94c3844ba38cfa501fa3928a2bff828011#egg=Keras
-Keras-Applications==1.0.8
-Keras-Preprocessing==1.1.0
 kiwisolver==1.1.0
 locket==0.2.0
 Mako==1.1.0
@@ -89,10 +86,8 @@ ptyprocess==0.6.0
 py==1.8.0
 pycosat==0.6.3
 pycparser==2.18
-pycrypto==2.6.1
 Pygments==2.4.2
 pygpu==0.7.6
-pyOpenSSL==17.0.0
 pyparsing==2.2.0
 pyrsistent==0.15.4
 PySocks==1.7.1
@@ -117,8 +112,6 @@ sortedcontainers==2.1.0
 tables==3.5.2
 tblib==1.4.0
 tensorboard==1.13.1
-tensorflow-estimator==1.13.0
-tensorflow-gpu==1.13.1
 termcolor==1.1.0
 terminado==0.8.2
 testpath==0.4.2
