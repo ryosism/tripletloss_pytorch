@@ -3,3 +3,5 @@
 /ex*/
 *.pdf
 *.ckpt
+/src
+batch.sh
