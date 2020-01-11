@@ -39,7 +39,6 @@ def parse_arguments():
     parser.add_argument('--imageRootDir', '-i', help='imageRootDir')
     parser.add_argument('--jsonDir', '-j', help='jsonDir')
     parser.add_argument('--frameLengthCSV', '-c', help='Path_to_frame_length.csv')
-    parser.add_argument('--lossfunc', '-l', help="lossfunction ('tripletloss' or 'quintupletLoss')")
 
     return parser.parse_args()
 
@@ -149,8 +148,7 @@ def train():
 
             all_loss = 0
             for anchor_vec, positive_1_vec, positive_2_vec, negative_1_vec, negative_2_vec in zip(anchor_vec_batch, positive_1_vec_batch, positive_2_vec_batch, negative_1_vec_batch, negative_2_vec_batch):
-                if args.lossfunc == 'tripletloss':
-                    # loss = triplet_loss(anchor_vec, positive_1_vec, negative_1_vec)
+                if cfg.LOSS_FUNCTION == 'tripletloss':
                     loss = tripletLoss(a_feat=anchor_vec, po_feat=positive_1_vec, ne_feat=negative_1_vec)
                 else:
                     loss = quintupletLoss(
