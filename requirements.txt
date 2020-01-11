@@ -92,7 +92,7 @@ pycparser==2.18
 pycrypto==2.6.1
 Pygments==2.4.2
 pygpu==0.7.6
-pyOpenSSL==17.0.0
+pyOpenSSL==17.5.0
 pyparsing==2.2.0
 pyrsistent==0.15.4
 PySocks==1.7.1
