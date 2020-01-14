@@ -1,9 +1,9 @@
 from pathlib import Path
 
 # TRAIN_PARAMETERS
-NUM_TRAINEX = "25"
+NUM_TRAINEX = "26"
 EPOCH = 500
-BATCH_SIZE = 1
+BATCH_SIZE = 2
 LOG_INTERVAL = 50 * BATCH_SIZE
 GRAPH_PDF = "./ex{}/train_loss.pdf".format(NUM_TRAINEX)
 TSNE_DEBUG = False
@@ -11,8 +11,11 @@ LOSS_MARGIN = 1.0
 IMG_SIZE = (384, 512)
 NET_DIMENTIONS = 64
 LEARNING_RATE = 0.005
-LOSS_FUNCTION = "quintupletLoss"
+LOSS_FUNCTION = "clusteredTripletLoss"
 ENABLE_SWAP = True
+NUM_OF_SAMPLES_FOR_SWAP = 9
+
+# INFO: GPUのメモリの都合上1080ti(11GB)では，BATCH_SIZE * NUM_OF_SAMPLES_FOR_SWAP =< 18であることが好ましい(他のハイパラで変わるけど)
 
 # TEST_PARAMETERS
 NUM_TESTEX = "24"

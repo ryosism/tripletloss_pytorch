@@ -79,6 +79,18 @@ def tripletLoss(a_feat, po_feat, ne_feat, alpla=cfg.LOSS_MARGIN):
     return loss
 
 
+def clusteredTripletLoss(anchor_feat, po_feat_list, ne_feat_list, alpla=cfg.LOSS_MARGIN):
+    pdist = nn.PairwiseDistance(p=2, keepdim=True)
+
+    anchorPositiveDistList = [pdist(anchor_feat, po_feat) for po_feat in po_feat_list]
+    anchorNegativeDistList = [pdist(anchor_feat, ne_feat) for ne_feat in ne_feat_list]
+    maxAnchorPositiveDist = max(anchorPositiveDistList)
+    minAnchorNegativeDist = min(anchorNegativeDistList)
+
+    loss = torch.clamp(maxAnchorPositiveDist - minAnchorNegativeDist + alpla, min=0.0)
+
+    return loss
+
 def plot_graph(train_loss, outputPath):
     fig = plt.figure(figsize=(16, 8))
     plt.xlabel('epoch')
@@ -108,7 +120,7 @@ def train():
     logger.addHandler(sh)
 
     # dataloader
-    tcnDataset = TcnDataset(imageRootDir=args.imageRootDir, jsonDir=args.jsonDir, frameLengthCSV=args.frameLengthCSV, anchorSize=img_size)
+    tcnDataset = TcnDataset(imageRootDir=args.imageRootDir, jsonDir=args.jsonDir, frameLengthCSV=args.frameLengthCSV, anchorSize=img_size, numOfSamplesForSwap=int(cfg.NUM_OF_SAMPLES_FOR_SWAP))
     train_loader = torch.utils.data.DataLoader(dataset=tcnDataset, batch_size=batch_size, shuffle=True, num_workers=8)
 
     # model
@@ -130,33 +142,45 @@ def train():
 
         interval_loss_sum = 0
         epoch_loss_sum = 0
-        for batch_idx, (anchor_batch, positive_1_batch, positive_2_batch, negative_1_batch, negative_2_batch) in enumerate(train_loader, start=1):
+        for batch_idx, (anchorTensor, positiveSampleTensorList, negativeSampleTensorList) in enumerate(train_loader, start=1):
             optimizer.zero_grad()
 
-            # この処理によって、batch_negaposiはtorch.Size([4 * batchsize, 3, height, width])になっている
-            batch_negaposi = positive_1_batch
-            batch_negaposi = torch.cat((batch_negaposi, positive_2_batch), dim=0)
-            batch_negaposi = torch.cat((batch_negaposi, negative_1_batch), dim=0)
-            batch_negaposi = torch.cat((batch_negaposi, negative_2_batch), dim=0)
+            # この処理によって、batch_negaはtorch.Size([numOfSamplesForSwap * batch_size, 3, height, width])になっている
+            batch_posi = torch.empty([0, 3, img_size[0], img_size[1]])
+            for positiveSampleTensor in positiveSampleTensorList:
+                batch_posi = torch.cat((batch_posi, positiveSampleTensor), dim=0)
 
-            anchor_vec_batch = model(anchor_batch.to(device))
-            negaposi_vec_batch = model(batch_negaposi.to(device))
+            batch_nega = torch.empty([0, 3, img_size[0], img_size[1]])
+            for negativeSampleTensor in negativeSampleTensorList:
+                batch_nega = torch.cat((batch_nega, negativeSampleTensor), dim=0)
 
-            sample_vec_batch = [torch.unsqueeze(vec, 0) for vec in negaposi_vec_batch]
+            anchor_vecs_batch = model(anchorTensor.to(device))
+            posi_vec_batch = model(batch_posi.to(device))
+            nega_vec_batch = model(batch_nega.to(device))
 
-            positive_1_vec_batch, positive_2_vec_batch, negative_1_vec_batch, negative_2_vec_batch = zip(*[iter(sample_vec_batch)] * batch_size)
+            sample_posi_vec_batch = [torch.unsqueeze(vec, 0) for vec in posi_vec_batch]
+            sample_nega_vec_batch = [torch.unsqueeze(vec, 0) for vec in nega_vec_batch]
+
+            # batchsizeが4，numOfSamplesForSwapが3，anchorに対する入力クラスタをそれぞれa,b,c,dだとしたら[abcdabcdabcd]という感じにconcatされて積み上がってベクトルまでくる
+            # 下の式によって[[a,a,a], [b,b,b], [c,c,c], [d,d,d]]という風に分割されてclusterdTripletLossに投げられる
+            positive_vecs_list = [sample_posi_vec_batch[idx::batch_size] for idx in range(batch_size)]
+            negative_vecs_list = [sample_nega_vec_batch[idx::batch_size] for idx in range(batch_size)]
 
             all_loss = 0
-            for anchor_vec, positive_1_vec, positive_2_vec, negative_1_vec, negative_2_vec in zip(anchor_vec_batch, positive_1_vec_batch, positive_2_vec_batch, negative_1_vec_batch, negative_2_vec_batch):
+            for anchor_vec, positive_vecs, negative_vecs in zip(anchor_vecs_batch, positive_vecs_list, negative_vecs_list):
                 if cfg.LOSS_FUNCTION == 'tripletloss':
-                    loss = tripletLoss(a_feat=anchor_vec, po_feat=positive_1_vec, ne_feat=negative_1_vec)
+                    loss = tripletLoss(a_feat=anchor_vec, po_feat=positive_vecs[0], ne_feat=negative_vecs[0])
+
+                elif cfg.LOSS_FUNCTION == 'clusteredTripletLoss':
+                    loss = clusteredTripletLoss(anchor_feat=anchor_vec, po_feat_list=positive_vecs, ne_feat_list=negative_vecs)
+
                 else:
                     loss = quintupletLoss(
                         anchor_vec,
-                        positive_1_vec,
-                        positive_2_vec,
-                        negative_1_vec,
-                        negative_2_vec,
+                        positive_vecs[0],
+                        positive_vecs[1],
+                        negative_vecs[0],
+                        negative_vecs[1],
                     )
 
                     if cfg.TSNE_DEBUG:
@@ -166,18 +190,18 @@ def train():
                                 visualizeTriplet.featToTsne(
                                     featList=[
                                         anchor_vec.clone().detach().cpu().numpy().astype(np.float64),
-                                        positive_1_vec.clone().detach().cpu().numpy().astype(np.float64),
-                                        positive_2_vec.clone().detach().cpu().numpy().astype(np.float64),
-                                        negative_1_vec.clone().detach().cpu().numpy().astype(np.float64),
-                                        negative_2_vec.clone().detach().cpu().numpy().astype(np.float64)
+                                        positive_vecs[0].clone().detach().cpu().numpy().astype(np.float64),
+                                        positive_vecs[1].clone().detach().cpu().numpy().astype(np.float64),
+                                        negative_vecs[0].clone().detach().cpu().numpy().astype(np.float64),
+                                        negative_vecs[1].clone().detach().cpu().numpy().astype(np.float64)
                                     ],
                                     fileName=fileName,
                                     imgList=[
-                                        torch.squeeze(anchor_batch[0]).permute(1,2,0).numpy(),
-                                        torch.squeeze(positive_1_batch[0]).permute(1,2,0).numpy(),
-                                        torch.squeeze(positive_2_batch[0]).permute(1,2,0).numpy(),
-                                        torch.squeeze(negative_1_batch[0]).permute(1,2,0).numpy(),
-                                        torch.squeeze(negative_2_batch[0]).permute(1,2,0).numpy()
+                                        torch.squeeze(anchorTensor[0]).permute(1,2,0).numpy(),
+                                        torch.squeeze(positiveSampleTensorList[0][0]).permute(1,2,0).numpy(),
+                                        torch.squeeze(positiveSampleTensorList[1][0]).permute(1,2,0).numpy(),
+                                        torch.squeeze(negativeSampleTensorList[0][0]).permute(1,2,0).numpy(),
+                                        torch.squeeze(negativeSampleTensorList[1][0]).permute(1,2,0).numpy()
                                     ]
                                 )
                 all_loss = all_loss + loss
