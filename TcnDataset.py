@@ -72,23 +72,24 @@ class TcnDataset(torch.utils.data.Dataset):
         positiveSamplePathList.append(annotatedPositivePath)
         annotatedPositiveIndexNum = int(Path(annotatedPositivePath).stem)
 
-        while(1):
-            # positiveから50フレームまでの距離も実質positiveに
-            # TODO: ここ50フレームってことは1.6秒とかじゃないか？もう少し長くしてもいいかもしれない....
-            # TODO: このままだとnumOfSamplesForSwapが5以上の場合、ここで無限ループする
+        if not self.numOfSamplesForSwap == 1:
+            while(1):
+                # positiveから50フレームまでの距離も実質positiveに
+                # TODO: ここ50フレームってことは1.6秒とかじゃないか？もう少し長くしてもいいかもしれない....
+                # TODO: このままだとnumOfSamplesForSwapが5以上の場合、ここで無限ループする
 
-            # FIXED: positiveから10秒前10秒後までsemiPositiveにした、この場合だとnumOfSamplesForSwapは14まで許容される
-            # 00:00 |-----------------------|pppppppppppppp|P| 40:00 ←Positiveが一番末尾にあった場合10秒後はフレームがないため無限ループを起こす
+                # FIXED: positiveから10秒前10秒後までsemiPositiveにした、この場合だとnumOfSamplesForSwapは14まで許容される
+                # 00:00 |-----------------------|pppppppppppppp|P| 40:00 ←Positiveが一番末尾にあった場合10秒後はフレームがないため無限ループを起こす
 
-            positiveRandIndexNum = random.choice(range(annotatedPositiveIndexNum - 300, annotatedPositiveIndexNum + 300, 10))
-            positiveAroundPath = Path(str(Path(annotatedPositivePath).parent)+"/"+str(positiveRandIndexNum).zfill(7)+".png")
-            if Path(positiveAroundPath).exists():
-                if positiveAroundPath in positiveSamplePathList: #もうすでにリストに存在しているAroundPathは無視する
-                    continue
+                positiveRandIndexNum = random.choice(range(annotatedPositiveIndexNum - 300, annotatedPositiveIndexNum + 300, 10))
+                positiveAroundPath = Path(str(Path(annotatedPositivePath).parent)+"/"+str(positiveRandIndexNum).zfill(7)+".png")
+                if Path(positiveAroundPath).exists():
+                    if positiveAroundPath in positiveSamplePathList: #もうすでにリストに存在しているAroundPathは無視する
+                        continue
 
-                positiveSamplePathList.append(positiveAroundPath)
-                if len(positiveSamplePathList) == self.numOfSamplesForSwap:
-                    break
+                    positiveSamplePathList.append(positiveAroundPath)
+                    if len(positiveSamplePathList) == self.numOfSamplesForSwap:
+                        break
 
         # positiveSamplePathListの中の画像を全て読み込む
         positiveSampleTensorList = [self.transform(Image.open(str(path))) for path in positiveSamplePathList]
