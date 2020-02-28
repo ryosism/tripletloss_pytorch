@@ -27,6 +27,10 @@ import paramConfig as cfg
 # logger
 import logging
 
+# matplotlib and tsne
+import matplotlib.pyplot as plt
+import visualizeTriplet
+
 # Search Engine
 import nmslib
 
@@ -82,13 +86,20 @@ def test_singleParam_singleVideo(logger, model, paramPath, frameDir, orderDir):
         num_workers=6,
         pin_memory=True
     )
+    # t-sneに投げる用の画像(numpy)のリストを作成
+    imgListToTsne = []
+    featShapeToTsne = []
 
     # 手順画像は直接リストで作成
     recipeOrderImageList = [path for path in Path(orderDir).glob("*.png")]
 
     # 動画フレームの画像を特徴抽出
+    # TODO: メモリに全ての特徴ベクトルをスタックさせるため、数十GBのメモリを食ってしまっている
+    #       バッチごとに全ての手順画像とそれぞれ距離比較して、都度ランキングを更新して行った方がメモリ的に安全
     videoFrameFeatList = np.empty((0, int(cfg.TEST_NET_DIMENTIONS)), int)
     for idx, batch in enumerate(videoFrameDataLoader, start=1):
+        batchArray = np.array(batch.cpu())
+        imgListToTsne += [img for img in batchArray]
         with torch.no_grad():
             feat = model(batch.to(device)).clone().detach().cpu().numpy()
         videoFrameFeatList = np.vstack([videoFrameFeatList, feat])
@@ -96,13 +107,17 @@ def test_singleParam_singleVideo(logger, model, paramPath, frameDir, orderDir):
             logger.log(30, "{} images are extracted.".format(str(idx * cfg.TEST_BATCH_SIZE)))
 
     logger.log(30, "{} images are extracted.".format(str(len(videoFrameFeatList))))
+    featShapeToTsne = videoFrameFeatList
 
     # 手順画像も特徴抽出
     recipeOrderFeatList = []
     for idx, imagePath in enumerate(recipeOrderImageList, start=1):
         img = loadImage(imagePath, device)
+        imgArray = np.array(img.cpu())
+        imgListToTsne += [imgArray.reshape(imgArray.shape[1:])]
         with torch.no_grad():
             feat = model(img).clone().detach().cpu().numpy()
+        featShapeToTsne = np.vstack([featShapeToTsne, feat])
         recipeOrderFeatList.append(feat)
 
     logger.log(30, "Extarcted all features.")
@@ -129,11 +144,17 @@ def test_singleParam_singleVideo(logger, model, paramPath, frameDir, orderDir):
     #     QUERY.append(recipeOrderFileName)
     #     CANDIDATE.append(CANDIDATE_PER_ORDER)
     #
+    visualizeTriplet.featToTsne(
+        featList = featShapeToTsne,
+        fileName = "./ex{}/scatter_image_video_{}_p{}".format(str(cfg.NUM_TESTEX).zfill(2), str(Path(args.testDirPath).name), str(cfg.TEST_PERPLEXITY)),
+        imgList = [np.transpose(img, (1, 2, 0)) for img in imgListToTsne],
+        perplexity = float(cfg.TEST_PERPLEXITY)
+    )
 
     for recipeOrderFileName, recipeOrderFeat in zip(recipeOrderImageList, recipeOrderFeatList):
         logger.log(30, recipeOrderFileName)
 
-        top5Dist = [1000000, 1000000, 1000000, 10000000, 10000000]
+        top5Dist = [100000000, 100000000, 100000000, 100000000, 100000000]
         top5Index = [-1, -1, -1, -1, -1]
         top5FileName = ["", "", "", "", ""]
 
