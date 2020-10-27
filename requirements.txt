@@ -18,7 +18,7 @@ cnn-finetune==0.6.0
 conda==4.7.12
 conda-package-handling==1.6.0
 coverage==4.5.4
-cryptography==1.8.1
+cryptography==3.2
 cycler==0.10.0
 Cython==0.29.14
 cytoolz==0.10.0
