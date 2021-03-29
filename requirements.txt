@@ -86,7 +86,7 @@ ptyprocess==0.6.0
 py==1.8.0
 pycosat==0.6.3
 pycparser==2.18
-Pygments==2.4.2
+Pygments==2.7.4
 pygpu==0.7.6
 pyparsing==2.2.0
 pyrsistent==0.15.4
